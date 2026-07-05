@@ -64,6 +64,7 @@ public class SimpleMecanumDrive extends LinearOpMode {
                 ballStopper.setPosition(1);
             }
 
+            // telemetry data
             telemetry.addData("Ball Stopper Position", ballStopper.getPosition());
             telemetry.update();
         }
