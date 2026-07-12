@@ -2,13 +2,14 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.CRServo;
 
-@TeleOp(name = "Arka's TeleOp Main")
-public class Arka_TeleOpMain extends LinearOpMode {
+@TeleOp(name = "TeleOpVariableBallStopper")
+public class TeleOpVariableBallStopper extends LinearOpMode {
     private DcMotor leftFrontMotor;
     private DcMotor leftBackMotor;
     private DcMotor rightFrontMotor;
@@ -50,7 +51,7 @@ public class Arka_TeleOpMain extends LinearOpMode {
             double x = gamepad1.left_stick_x; // strafing movement
             double rx = gamepad1.right_stick_x; // left/right rotation
 
-            /* || strafing math || strafing math || strafing math || strafing math || idk  || */
+            /* || strafing math || strafing math || strafing math || strafing math || idk || */
             double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1.0);
 
             double leftFrontPower = (y + x + rx) / denominator;
@@ -58,10 +59,12 @@ public class Arka_TeleOpMain extends LinearOpMode {
             double rightFrontPower = (y - x - rx) / denominator;
             double rightBackPower = (y + x - rx) / denominator;
 
-            // flywheel ticks per second calculation || configure rpm
+            // flywheel ticks per second calculation || configure rpm and deviation tolerance
             double flywheelPowerRPM = 2000;
             double flywheelPowerRPS = flywheelPowerRPM / 60;
-            double flywheelticks = flywheelPowerRPS * 28;
+            double flywheelTargetVelocity = flywheelPowerRPS * 28;
+
+            double targetVelocityDeviationToleranceMargin = 70; // how much the flywheel encoder ticks per second can be off by before shooting
 
             // set power to drivetrain
             leftFrontMotor.setPower(leftFrontPower);
@@ -70,11 +73,11 @@ public class Arka_TeleOpMain extends LinearOpMode {
             rightBackMotor.setPower(rightBackPower);
 
             // intake and transfer
-            if (gamepad1.right_trigger > 0.1) {
+            if (gamepad1.right_trigger > 0.1) { // collect artifact inwards
                 intakeMotor.setPower(1.0);
                 leftTransfer.setPower(-1.0);
                 rightTransfer.setPower(-1.0);
-            } else if (gamepad1.left_trigger > 0.1) {
+            } else if (gamepad1.left_trigger > 0.1) { // eject artifact outwards
                 intakeMotor.setPower(-1.0);
                 leftTransfer.setPower(1.0);
                 rightTransfer.setPower(1.0);
@@ -86,11 +89,40 @@ public class Arka_TeleOpMain extends LinearOpMode {
 
             // flywheel motor set velocity
             if (gamepad1.right_bumper) {
-                flywheelMotorLeft.setVelocity(flywheelticks);
-                flywheelMotorRight.setVelocity(flywheelticks);
+                flywheelMotorLeft.setVelocity(flywheelTargetVelocity);
+                flywheelMotorRight.setVelocity(flywheelTargetVelocity);
+
+                // check if current flywheel velocity is within expected margins
+                double leftShooterVelocity = flywheelMotorLeft.getVelocity();
+                double rightShooterVelocity = flywheelMotorRight.getVelocity();
+
+                boolean isLeftShooterGood = false;
+                boolean isRightShooterGood = false;
+
+                if (leftShooterVelocity >= (flywheelTargetVelocity - targetVelocityDeviationToleranceMargin) &&
+                        leftShooterVelocity <= (flywheelTargetVelocity + targetVelocityDeviationToleranceMargin)) {
+                    isLeftShooterGood = true;
+                } else {
+                    isLeftShooterGood = false;
+                }
+
+                if (rightShooterVelocity >= (flywheelTargetVelocity - targetVelocityDeviationToleranceMargin) &&
+                        rightShooterVelocity <= (flywheelTargetVelocity + targetVelocityDeviationToleranceMargin)) {
+                    isRightShooterGood = true;
+                } else {
+                    isRightShooterGood = false;
+                }
+
+                // open ball stopper if conditions are met
+                if (isLeftShooterGood && isRightShooterGood) {
+                    ballStopper.setPosition(0);
+                } else {
+                    ballStopper.setPosition(1);
+                }
             } else {
                 flywheelMotorLeft.setVelocity(0);
                 flywheelMotorRight.setVelocity(0);
+                ballStopper.setPosition(1);
             }
 
             // calculate motor rpm to feed telemetry || reversing the conversion from RPM to ticks per second
@@ -100,12 +132,16 @@ public class Arka_TeleOpMain extends LinearOpMode {
             double rpmLeftShooter = tickPerSecondFlywheelMotorLeft * 60;
             double rpmRightShooter = tickPerSecondFlywheelMotorRight * 60;
 
-            // motor rpm telemetry
-            telemetry.addData("leftmotorvelocityRPM", rpmLeftShooter);
-            telemetry.addData("rightmotorvelocityRPM", rpmRightShooter);
+            // motor rpm, servo position, and deviation tolerance margin levels for the telemetry
+            telemetry.addData("Left Shooter Motor RPM", rpmLeftShooter);
+            telemetry.addData("Right Shooter Motor RPM", rpmRightShooter);
+            telemetry.addData("Target Velocity Deviation Tolerance Margin", targetVelocityDeviationToleranceMargin);
+            telemetry.addData("Ball Stopper Position", ballStopper.getPosition());
             telemetry.update();
 
             // ball stopper debug
+
+            /* so apparently y hits it and goes all the way up so the open position is probably ~0.75 right??? and closed is 1??? */
             if (gamepad1.y) {
                 ballStopper.setPosition(0);
             }
